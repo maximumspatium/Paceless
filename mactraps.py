@@ -8,25 +8,30 @@ UNIMPL_TRAP_ADDR   = 0xFFFF0000
 
 TRAP_TABLE = {
     # trap #    trap name               method name         trap address  params
-    0xA01B : ("_SetZone",               'dummy_trap',       0xFFF30000),
-    0xA029 : ("_HLock",                 'dummy_trap',       0xFFF30004),
-    0xA02E : ("_BlockMove",             'block_copy',       0xFFF30008),
-    0xA055 : ("_StripAddress",          'dummy_trap',       0xFFF3000C),
-    0xA064 : ("_MoveHHi",               'dummy_trap',       0xFFF30010),
-    0xA0AD : ("_GestaltDispatch",       'dummy_trap',       0xFFF30014),
-    0xA0BD : ("_CacheFlush",            'dummy_trap',       0xFFF30018),
-    0xA11A : ("_GetZone",               'dummy_trap',       0xFFF3001C),
-    0xA122 : ("_NewHandle",             'new_handle',       0xFFF30020),
-    0xA128 : ("_RecoverHandle",         'recover_handle',   0xFFF30024),
-    0xA162 : ("_PurgeSpace",            'dummy_trap',       0xFFF30028),
-    0xA1AD : ("_Gestalt",               'gestalt',          0xFFF3002C),
-    0xA025 : ("_GetHandleSize",         'get_handle_size',  0xFFF30030),
-    0xA31E : ("_NewPtrClear",           'new_ptr_clear',    0xFFF30034),
-    0xA322 : ("_NewHandleClear",        'new_handle_clear', 0xFFF30038),
-    0xA346 : ("_GetOSTrapAddress",      'get_trap_addr',    0xFFF3003C),
-    0xA746 : ("_GetToolTrapAddress",    'get_trap_addr',    0xFFF30040),
-    0xA994 : ("_CurResFile",            'dummy_trap',       0xFFF30044),
-    0xA9A0 : ("_GetResource",           'get_resource',     0xFFF30048, 'W', 'L'),
+    0xA01B : ("_SetZone",               'dummy_trap',       0xFFF30100),
+    0xA029 : ("_HLock",                 'dummy_trap',       0xFFF30204),
+    0xA02E : ("_BlockMove",             'block_copy',       0xFFF30308),
+    0xA055 : ("_StripAddress",          'dummy_trap',       0xFFF3040C),
+    0xA064 : ("_MoveHHi",               'dummy_trap',       0xFFF30510),
+    0xA0AD : ("_GestaltDispatch",       'dummy_trap',       0xFFF30614),
+    0xA0BD : ("_CacheFlush",            'dummy_trap',       0xFFF30718),
+    0xA11A : ("_GetZone",               'dummy_trap',       0xFFF3081C),
+    0xA11E : ("_NewPtr",                'new_ptr',          0xFFF30820),
+    0xA122 : ("_NewHandle",             'new_handle',       0xFFF30920),
+    0xA128 : ("_RecoverHandle",         'recover_handle',   0xFFF30A24),
+    0xA162 : ("_PurgeSpace",            'dummy_trap',       0xFFF30B28),
+    0xA1AD : ("_Gestalt",               'gestalt',          0xFFF30C2C),
+    0xA025 : ("_GetHandleSize",         'get_handle_size',  0xFFF30D30),
+    0xA31E : ("_NewPtrClear",           'new_ptr',          0xFFF30E34),
+    0xA322 : ("_NewHandleClear",        'new_handle',       0xFFF30F38),
+    0xA346 : ("_GetOSTrapAddress",      'get_trap_addr',    0xFFF30F3C),
+    0xA51E : ("_NewPtrSys",             'new_ptr',          0xFFF31020),
+    0xA522 : ("_NewHandleSys",          'new_handle',       0xFFF31040),
+    0xA71E : ("_NewPtrSysClear",        'new_ptr',          0xFFF31050),
+    0xA722 : ("_NewHandleSysClear",     'new_handle',       0xFFF31080),
+    0xA746 : ("_GetToolTrapAddress",    'get_trap_addr',    0xFFF32040),
+    0xA994 : ("_CurResFile",            'dummy_trap',       0xFFF33044),
+    0xA9A0 : ("_GetResource",           'get_resource',     0xFFF34048, 'W', 'L'),
 }
 
 def fourcc_to_bytes(fourcc):
@@ -104,21 +109,23 @@ class MacTraps:
 
     def new_handle(self):
         sz = self._rt.get_cpu().r_reg(M68K_REG_D0)
-        print("NewHandle size %X" % sz)
-        self._rt.get_cpu().w_reg(M68K_REG_A0, self._mm.new_handle(sz))
+        clear = self._last_trap & 0x200
+        print("Handle size %X" % sz)
+        print("Heap Zone: %s" % ("sys" if self._last_trap & 0x400 else "current"))
+        print("Clear bytes: %s" % ("yes" if clear else "no"))
+        self._rt.get_cpu().w_reg(M68K_REG_A0, self._mm.new_handle(sz, zero=clear))
 
-    def new_ptr_clear(self):
+    def new_ptr(self):
         sz = self._rt.get_cpu().r_reg(M68K_REG_D0)
-        print("NewPtr size %X" % sz)
+        clear = self._last_trap & 0x200
+        print("Ptr size %X" % sz)
+        print("Heap Zone: %s" % ("sys" if self._last_trap & 0x400 else "current"))
+        print("Clear bytes: %s" % ("yes" if clear else "no"))
         new_ptr = self._mm.alloc_mem(sz)
-        for i in range(sz):
-            self._rt.get_mem().w8(new_ptr + i, 0)
+        if clear:
+            for i in range(sz):
+                self._rt.get_mem().w8(new_ptr + i, 0)
         self._rt.get_cpu().w_reg(M68K_REG_A0, new_ptr)
-
-    def new_handle_clear(self):
-        sz = self._rt.get_cpu().r_reg(M68K_REG_D0)
-        print("NewHandle size %X" % sz)
-        self._rt.get_cpu().w_reg(M68K_REG_A0, self._mm.new_handle(sz, zero=True))
 
     def get_trap_addr(self):
         trap_num = (self._rt.get_cpu().r_reg(M68K_REG_D0)) & 0xFFFF
