@@ -27,6 +27,39 @@ def disas_single_68k(address, code, mac_traps):
     print("0x%x\t\t%s\t%s" % (i.address, i.mnemonic.upper(), i.op_str.upper()))
     return i.size
 
+def is_cpu_reg(reg_name):
+    if len(reg_name) < 2 or len(reg_name) > 2:
+        return False
+    if reg_name == "PC" or reg_name == "SR":
+        return True
+    elif reg_name.startswith("A") or reg_name.startswith("D"):
+        try:
+            reg_num = int(reg_name[1:2], 0) # string to int conversion may fail!
+        except ValueError:
+            return False
+        if reg_num >= 0 and reg_num <= 7:
+            return True
+        else:
+            return False
+    else:
+        return False
+
+def write_cpu_reg(cpu_obj, reg_name, val):
+    if not is_cpu_reg(reg_name):
+        print("Invalid register name %s" % reg_name)
+        return
+    if reg_name == "PC":
+        cpu_obj.w_pc(val)
+        return
+    elif reg_name == "SR":
+        cpu_obj.w_sr(val)
+        return
+    reg_num = int(reg_name[1:2], 0)
+    if reg_name.startswith("A"):
+        cpu_obj.w_ax(reg_num, val)
+    else:
+        cpu_obj.w_dx(reg_num, val)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -232,9 +265,12 @@ if __name__ == "__main__":
             if len(args) < 2:
                 print("Invalid command syntax")
                 continue
-            dst = args[0].upper()
+            reg = args[0].upper()
             val = int(args[1], 0)
-            cpu_obj.set_state(dst, val)
+            if not is_cpu_reg(reg):
+                print("Unknown CPU register %s" % reg)
+                continue
+            write_cpu_reg(rt.get_cpu(), reg, val)
         elif cmd == "help":
             print("step       - execute single instruction")
             print("si         - execute single instruction")
