@@ -19,6 +19,7 @@ TRAP_TABLE = {
     0xA11E : ("_NewPtr",                'new_ptr',          0xFFF30820),
     0xA122 : ("_NewHandle",             'new_handle',       0xFFF30920),
     0xA128 : ("_RecoverHandle",         'recover_handle',   0xFFF30A24),
+    0xA146 : ("_GetTrapAddress",        'get_trap_addr',    0xFFF30A30),
     0xA162 : ("_PurgeSpace",            'dummy_trap',       0xFFF30B28),
     0xA1AD : ("_Gestalt",               'gestalt',          0xFFF30C2C),
     0xA025 : ("_GetHandleSize",         'get_handle_size',  0xFFF30D30),
