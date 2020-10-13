@@ -1,9 +1,10 @@
-import sys
+import argparse
+import logging
 import os
 import struct
-import rsrcfork
-import logging
+import sys
 
+import rsrcfork
 from capstone import *
 from bare68k import *
 from bare68k.consts import *
@@ -60,13 +61,17 @@ def write_cpu_reg(cpu_obj, reg_name, val):
     else:
         cpu_obj.w_dx(reg_num, val)
 
+# ------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        exe_path  = os.path.abspath(sys.argv[1])
-    else:
-        print('Please specify a file to process.')
-        exit(1);
+    ap = argparse.ArgumentParser(description='Mac 68k virtualization package.')
+    ap.add_argument("path", help="path to the file to execute")
+    ap.add_argument("-r", "--rom_path",
+        help="path to ROM file to load during startup")
+    ap.add_argument("-b", "--rom_base", help="base address for ROM",
+        default=0xFFC00000, type=lambda x: int(x, 0))
+
+    args = ap.parse_args()
 
     # configure logging
     runtime.log_setup(level=logging.INFO)
@@ -79,13 +84,28 @@ if __name__ == "__main__":
     # create a RAM region (64k) starting at address 0
     mem_cfg.add_ram_range(0, 5)
 
+    if args.rom_path:
+        print("Loading ROM...")
+        with open(args.rom_path, 'rb') as rom_file:
+            rom_len = os.path.getsize(args.rom_path)
+            mem_cfg.add_rom_range(args.rom_base // 65536, rom_len // 65536)
+            rom_data = rom_file.read()
+
     run_cfg = RunConfig()
 
     rt = Runtime(cpu_cfg, mem_cfg, run_cfg)
 
     mem = rt.get_mem()
 
-    with rsrcfork.open(exe_path) as rf:
+    if args.rom_path:
+        # copy ROM image to the dedicated memory region
+        for i in range(rom_len):
+            mem.w8(args.rom_base + i, rom_data[i])
+
+        # set lowmem global ROMBase to the starting address of the loaded ROM
+        mem.w32(0x2AE, args.rom_base)
+
+    with rsrcfork.open(args.path) as rf:
         if b'CODE' in rf and 0 in rf[b'CODE']:
             print("Found executable 68k code!")
             jt_res = rf[b'CODE'][0]
@@ -104,7 +124,7 @@ if __name__ == "__main__":
             ep_res_len = ep_res.length
             ep_data = ep_res.data_raw
 
-            mt = MacTraps(rt, exe_path)
+            mt = MacTraps(rt, args.path)
             prog_handle = mt._mm.new_handle(ep_res_len)
             prog_base = mem.r32(prog_handle)
             print("prog_handle=%X, prog_base=%X" % (prog_handle, prog_base))
