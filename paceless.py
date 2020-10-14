@@ -209,8 +209,17 @@ if __name__ == "__main__":
         if cmd == "quit":
             pass
         elif cmd == "step" or cmd == "si":
+            if len(words) == 2:
+                try:
+                    count = int(words[1], 0)
+                except ValueError:
+                    print("Invalid instruction count")
+                    continue
+            else:
+                count = 1
             rt.get_cpu().set_instr_hook_func(instr_hook)
-            rt.run()
+            for i in range(count):
+                rt.run()
             rt.get_cpu().set_instr_hook_func(None)
         elif cmd == "until":
             if len(words) < 2:
@@ -292,8 +301,9 @@ if __name__ == "__main__":
                 continue
             write_cpu_reg(rt.get_cpu(), reg, val)
         elif cmd == "help":
-            print("step       - execute single instruction")
-            print("si         - execute single instruction")
+            print("step [N]   - execute N instructions")
+            print("             N defaults to 1 when omitted")
+            print("si         - alias for 'step'")
             print("until addr - execute until addr is reached")
             print("disas X Y  - disassemble Y instructions starting at X")
             print("             disas with no params disassembles")
