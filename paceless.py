@@ -61,6 +61,53 @@ def write_cpu_reg(cpu_obj, reg_name, val):
     else:
         cpu_obj.w_dx(reg_num, val)
 
+def is_size_ind(dsize):
+    if len(dsize) < 2 and (dsize == "B" or dsize == "W" or dsize == "L"):
+        return True
+    elif (dsize == "BYTE" or dsize == "WORD" or dsize == "LONGWORD"):
+        return True
+    else:
+        return False
+
+def is_size_value(dsize, val):
+    val_str = str(val)[2]
+    if len(val_str) == 2 and (dsize == "B" or dsize == "BYTE"):
+        return True
+    elif len(val_str) == 4 and (dsize == "W" or dsize == "WORD"):
+        return True
+    elif len(val_str) == 8 and (dsize == "L" or dsize == "LONGWORD"):
+        return True
+    else:
+        return False
+
+def is_addr(addr):
+    addr_str = str(addr)
+    list1=['0','2','4','6','8','A','C','E']
+    if addr_str[-1] in list1:
+        return True
+    else:
+        return False
+
+def write_memory(cpu_obj, addr, val, dsize):
+    if not is_size_ind(dsize):
+        print("Invalid size: %s" % dsize)
+        return
+#    if not is_size_value(dsize, val):
+#        print("Invalid value: %s" % hex(val))
+#        return
+    if not is_addr(addr):
+        print("Invalid address, must end with [0,2,4,6,8,A,C,E]: %s" % hex(addr))
+        return
+
+    if (dsize == "B" or dsize == "BYTE"):
+        mem.w8(addr, val)
+    elif (dsize == "W" or dsize == "WORD"):
+        mem.w16(addr, val)
+    elif (dsize == "L" or dsize == "LONGWORD"):
+        mem.w32(addr, val)
+    else:
+        return
+
 # ------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -300,18 +347,28 @@ if __name__ == "__main__":
                 print("Unknown CPU register %s" % reg)
                 continue
             write_cpu_reg(rt.get_cpu(), reg, val)
+        elif cmd == "setmem":
+            if len(words) < 4:
+                print("Invalid command syntax")
+                continue
+            addr  = int(words[1], 0)
+            val = int(words[2], 0)
+            dsize = words[3].upper()
+            write_memory(rt.get_cpu(), addr, val, dsize)
         elif cmd == "help":
-            print("step [N]   - execute N instructions")
-            print("             N defaults to 1 when omitted")
-            print("si         - alias for 'step'")
-            print("until addr - execute until addr is reached")
-            print("disas X Y  - disassemble Y instructions starting at X")
-            print("             disas with no params disassembles")
-            print("             five instructions starting at PC")
-            print("regs       - print internal registers")
-            print("dump X Y   - dump Y bytes starting at address X")
-            print("set X=Y    - change value of register X to Y")
-            print("quit       - shut down the simulator")
+            print("step [N]     - execute N instructions")
+            print("               N defaults to 1 when omitted")
+            print("si           - alias for 'step'")
+            print("until addr   - execute until addr is reached")
+            print("disas X Y    - disassemble Y instructions starting at X")
+            print("               disas with no params disassembles")
+            print("               five instructions starting at PC")
+            print("regs         - print internal registers")
+            print("dump X Y     - dump Y bytes starting at address X")
+            print("set X=Y      - change value of register X to Y")
+            print("setmem X Y Z - set address X to value Y with designated size Z")
+            print("               size is one of: byte (b), word (w), longword (l)")
+            print("quit         - shut down the simulator")
         else:
             print("Unknown command: %s" % cmd)
 
