@@ -62,28 +62,9 @@ def write_cpu_reg(cpu_obj, reg_name, val):
         cpu_obj.w_dx(reg_num, val)
 
 def is_size_ind(dsize):
-    if len(dsize) < 2 and (dsize == "B" or dsize == "W" or dsize == "L"):
+    if len(dsize) == 1 and (dsize == "B" or dsize == "W" or dsize == "L"):
         return True
     elif (dsize == "BYTE" or dsize == "WORD" or dsize == "LONGWORD"):
-        return True
-    else:
-        return False
-
-def is_size_value(dsize, val):
-    val_str = str(val)[2]
-    if len(val_str) == 2 and (dsize == "B" or dsize == "BYTE"):
-        return True
-    elif len(val_str) == 4 and (dsize == "W" or dsize == "WORD"):
-        return True
-    elif len(val_str) == 8 and (dsize == "L" or dsize == "LONGWORD"):
-        return True
-    else:
-        return False
-
-def is_addr(addr):
-    addr_str = str(addr)
-    list1=['0','2','4','6','8','A','C','E']
-    if addr_str[-1] in list1:
         return True
     else:
         return False
@@ -92,18 +73,18 @@ def write_memory(cpu_obj, addr, val, dsize):
     if not is_size_ind(dsize):
         print("Invalid size: %s" % dsize)
         return
-#    if not is_size_value(dsize, val):
-#        print("Invalid value: %s" % hex(val))
-#        return
-    if not is_addr(addr):
-        print("Invalid address, must end with [0,2,4,6,8,A,C,E]: %s" % hex(addr))
-        return
 
     if (dsize == "B" or dsize == "BYTE"):
         mem.w8(addr, val)
     elif (dsize == "W" or dsize == "WORD"):
+        if addr & 1:
+            print("Store address %s not aligned on word boundary!" % addr)
+            return
         mem.w16(addr, val)
     elif (dsize == "L" or dsize == "LONGWORD"):
+        if addr & 3:
+            print("Store address 0x%X not aligned on longword boundary!" % addr)
+            return
         mem.w32(addr, val)
     else:
         return
@@ -367,8 +348,14 @@ if __name__ == "__main__":
             if len(words) < 4:
                 print("Invalid command syntax")
                 continue
-            addr  = int(words[1], 0)
-            val = int(words[2], 0)
+            flag,addr = utils.str_to_int(words[1])
+            if not flag:
+                print("Invalid address %s" % words[1])
+                continue
+            flag,val = utils.str_to_int(words[2])
+            if not flag:
+                print("Invalid value %s" % words[2])
+                continue
             dsize = words[3].upper()
             write_memory(rt.get_cpu(), addr, val, dsize)
         elif cmd == "help":
