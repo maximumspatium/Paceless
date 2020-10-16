@@ -45,6 +45,20 @@ def is_cpu_reg(reg_name):
     else:
         return False
 
+def read_cpu_reg(cpu_obj, reg_name):
+    if not is_cpu_reg(reg_name):
+        print("Invalid register name %s" % reg_name)
+        return
+    if reg_name == "PC":
+        return cpu_obj.r_pc()
+    elif reg_name == "SR":
+        return cpu_obj.r_sr()
+    reg_num = int(reg_name[1:2], 0)
+    if reg_name.startswith("A"):
+        return cpu_obj.r_ax(reg_num)
+    else:
+        return cpu_obj.r_dx(reg_num)
+
 def write_cpu_reg(cpu_obj, reg_name, val):
     if not is_cpu_reg(reg_name):
         print("Invalid register name %s" % reg_name)
@@ -78,7 +92,7 @@ def write_memory(cpu_obj, addr, val, dsize):
         mem.w8(addr, val)
     elif (dsize == "W" or dsize == "WORD"):
         if addr & 1:
-            print("Store address %s not aligned on word boundary!" % addr)
+            print("Store address 0x%s not aligned on word boundary!" % addr)
             return
         mem.w16(addr, val)
     elif (dsize == "L" or dsize == "LONGWORD"):
@@ -286,10 +300,13 @@ if __name__ == "__main__":
                     print("Missing parameters")
                     continue
             else:
-                flag,addr = utils.str_to_int(words[1])
-                if not flag:
-                    print("Invalid address %s" % words[1])
-                    continue
+                if is_cpu_reg(words[1].upper()):
+                    addr = read_cpu_reg(rt.get_cpu(), words[1].upper())
+                else:
+                    flag,addr = utils.str_to_int(words[1])
+                    if not flag:
+                        print("Invalid address %s" % words[1])
+                        continue
                 flag,count = utils.str_to_int(words[2])
                 if not flag:
                     print("Invalid count %s" % words[2])
@@ -314,10 +331,13 @@ if __name__ == "__main__":
             if len(words) < 3:
                 print("Invalid command syntax")
                 continue
-            flag,addr = utils.str_to_int(words[1])
-            if not flag:
-                print("Invalid address %s" % words[1])
-                continue
+            if is_cpu_reg(words[1].upper()):
+                addr = read_cpu_reg(rt.get_cpu(), words[1].upper())
+            else:
+                flag,addr = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid address %s" % words[1])
+                    continue
             flag,count = utils.str_to_int(words[2])
             if not flag:
                 print("Invalid count %s" % words[2])
@@ -348,10 +368,13 @@ if __name__ == "__main__":
             if len(words) < 4:
                 print("Invalid command syntax")
                 continue
-            flag,addr = utils.str_to_int(words[1])
-            if not flag:
-                print("Invalid address %s" % words[1])
-                continue
+            if is_cpu_reg(words[1].upper()):
+                addr = read_cpu_reg(rt.get_cpu(), words[1].upper())
+            else:
+                flag,addr = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid address %s" % words[1])
+                    continue
             flag,val = utils.str_to_int(words[2])
             if not flag:
                 print("Invalid value %s" % words[2])
@@ -360,17 +383,20 @@ if __name__ == "__main__":
             write_memory(rt.get_cpu(), addr, val, dsize)
         elif cmd == "help":
             print("step [N]     - execute N instructions")
-            print("               N defaults to 1 when omitted")
-            print("si           - alias for 'step'")
-            print("until addr   - execute until addr is reached")
+            print("               N defaults to 1 when omitted\n")
+            print("si           - alias for 'step'\n")
+            print("until addr   - execute until addr is reached\n")
             print("disas X Y    - disassemble Y instructions starting at X")
             print("               disas with no params disassembles")
             print("               five instructions starting at PC")
-            print("regs         - print internal registers")
+            print("               X can be also any valid 68k register\n")
+            print("regs         - print internal registers\n")
             print("dump X Y     - dump Y bytes starting at address X")
-            print("set X=Y      - change value of register X to Y")
+            print("               X can be also any valid 68k register\n")
+            print("set X=Y      - change value of register X to Y\n")
             print("setmem X Y Z - set address X to value Y with designated size Z")
             print("               size is one of: byte (b), word (w), longword (l)")
+            print("               X can be also any valid 68k register\n")
             print("quit         - shut down the simulator")
         else:
             print("Unknown command: %s" % cmd)
