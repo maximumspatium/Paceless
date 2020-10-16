@@ -11,6 +11,7 @@ from bare68k.consts import *
 from bare68k.machine import *
 import bare68k.api.tools as tools
 from mactraps import MacTraps, InvalidTrap
+import utils
 
 md = Cs(CS_ARCH_M68K, CS_MODE_M68K_020)
 
@@ -34,9 +35,8 @@ def is_cpu_reg(reg_name):
     if reg_name == "PC" or reg_name == "SR":
         return True
     elif reg_name.startswith("A") or reg_name.startswith("D"):
-        try:
-            reg_num = int(reg_name[1:2], 0) # string to int conversion may fail!
-        except ValueError:
+        flag,reg_num = utils.str_to_int(reg_name[1:2])
+        if not flag:
             return False
         if reg_num >= 0 and reg_num <= 7:
             return True
@@ -210,10 +210,9 @@ if __name__ == "__main__":
             pass
         elif cmd == "step" or cmd == "si":
             if len(words) == 2:
-                try:
-                    count = int(words[1], 0)
-                except ValueError:
-                    print("Invalid instruction count")
+                flag,count = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid instruction count %s" % words[1])
                     continue
             else:
                 count = 1
@@ -225,7 +224,10 @@ if __name__ == "__main__":
             if len(words) < 2:
                 print("Missing parameter")
                 continue
-            addr = int(words[1], 0)
+            flag,addr = utils.str_to_int(words[1])
+            if not flag:
+                print("Invalid target address %s" % words[1])
+                continue
             print("Execute until 0x%03X" % addr)
             uh = until_hook(addr)
             rt.get_cpu().set_instr_hook_func(uh.func)
@@ -256,9 +258,14 @@ if __name__ == "__main__":
                     print("Missing parameters")
                     continue
             else:
-                addr  = int(words[1], 0)
-                count = int(words[2], 0)
-            #print("address %X, count %d" % (addr, count))
+                flag,addr = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid address %s" % words[1])
+                    continue
+                flag,count = utils.str_to_int(words[2])
+                if not flag:
+                    print("Invalid count %s" % words[2])
+                    continue
 
             try:
                 for i in range(count):
@@ -279,8 +286,14 @@ if __name__ == "__main__":
             if len(words) < 3:
                 print("Invalid command syntax")
                 continue
-            addr  = int(words[1], 0)
-            count = int(words[2], 0)
+            flag,addr = utils.str_to_int(words[1])
+            if not flag:
+                print("Invalid address %s" % words[1])
+                continue
+            flag,count = utils.str_to_int(words[2])
+            if not flag:
+                print("Invalid count %s" % words[2])
+                continue
             for i in range(count):
                 if (i & 0xF) == 0:
                     print("\n0x%X\t" % (addr + i), end = '')
@@ -295,7 +308,10 @@ if __name__ == "__main__":
                 print("Invalid command syntax")
                 continue
             reg = args[0].upper()
-            val = int(args[1], 0)
+            flag,val = utils.str_to_int(args[1])
+            if not flag:
+                print("Invalid value %s" % args[1])
+                continue
             if not is_cpu_reg(reg):
                 print("Unknown CPU register %s" % reg)
                 continue

@@ -5,3 +5,10 @@ def bit_not(n, numbits=32):
 
 def align(n, m):
     return (n + m - 1) & bit_not(m - 1)
+
+def str_to_int(str):
+    try:
+        result = int(str, 0)
+        return True,result
+    except ValueError:
+        return False,0
