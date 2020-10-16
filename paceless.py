@@ -342,11 +342,18 @@ if __name__ == "__main__":
             if not flag:
                 print("Invalid count %s" % words[2])
                 continue
-            for i in range(count):
-                if (i & 0xF) == 0:
-                    print("\n0x%X\t" % (addr + i), end = '')
-                print("%02X " % (mem.r8(addr + i)), end = '')
-            print("\n")
+            if len(words) == 4:
+                with open(words[3], 'wb') as out_file:
+                    buf = bytearray()
+                    for i in range(count):
+                        buf.append(mem.r8(addr + i))
+                    out_file.write(buf)
+            else:
+                for i in range(count):
+                    if (i & 0xF) == 0:
+                        print("\n0x%X\t" % (addr + i), end = '')
+                    print("%02X " % (mem.r8(addr + i)), end = '')
+                print("\n")
         elif cmd == "set":
             if len(words) < 2:
                 print("Missing parameters")
