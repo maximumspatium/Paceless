@@ -29,5 +29,5 @@ def unpack_pstr(bin_data):
     Unpack a pascal string from binary data and return a Python string.
     '''
     str_len = bin_data[0]
-    fmt_str = '%ip' % str_len
-    return struct.unpack(fmt_str, bin_data[0:str_len])[0].decode('utf-8')
+    fmt_str = '%ip' % (str_len + 1)
+    return struct.unpack(fmt_str, bin_data[0:str_len+1])[0].decode('mac_roman')
