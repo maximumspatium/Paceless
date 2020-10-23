@@ -32,6 +32,7 @@ TRAP_TABLE = {
     0xA71E : ("_NewPtrSysClear",        'new_ptr',          0xFFF31050),
     0xA722 : ("_NewHandleSysClear",     'new_handle',       0xFFF31080),
     0xA746 : ("_GetToolTrapAddress",    'get_trap_addr',    0xFFF32040),
+    0xA96E : ("_Dequeue",               'dummy_trap',       0x004019F0),
     0xA994 : ("_CurResFile",            'dummy_trap',       0xFFF33044),
     0xA9A0 : ("_GetResource",           'get_resource',     0xFFF34048, 'W', 'L'),
 }
@@ -140,7 +141,14 @@ class MacTraps:
     def gestalt(self):
         sel = utils.fourcc_to_bytes(self._rt.get_cpu().r_reg(M68K_REG_D0))
         print("Gestalt called, selector='%s'" % sel.decode())
-        self._rt.get_cpu().w_reg(M68K_REG_A0, 0xDEADBEEF)
+        if sel == b'os  ':
+            self._rt.get_cpu().w_reg(M68K_REG_A0, 0xDEADBEEF)
+        elif sel == b'proc':
+            print("Tell them we have a 68020 CPU")
+            self._rt.get_cpu().w_reg(M68K_REG_A0, 3)
+        else:
+            print("Unimplemented selector")
+            self._rt.get_cpu().w_reg(M68K_REG_A0, 0xCAFEBABE)
 
     def get_resource(self):
         res_type = utils.fourcc_to_bytes(self._args[0])
