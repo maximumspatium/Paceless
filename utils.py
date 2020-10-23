@@ -7,6 +7,16 @@ def bit_not(n, numbits=32):
 def align(n, m):
     return (n + m - 1) & bit_not(m - 1)
 
+def sign_extend(value, bits):
+    sign_bit = 1 << (bits - 1)
+    return (value & (sign_bit - 1)) - (value & sign_bit)
+
+def fourcc_to_bytes(fourcc):
+    res = bytearray()
+    for i in range(4):
+        res.append((fourcc >> (24 - i * 8)) & 0xFF)
+    return bytes(res)
+
 def str_to_int(str):
     try:
         result = int(str, 0)

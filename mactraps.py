@@ -2,6 +2,7 @@ import rsrcfork
 from bare68k.consts import *
 import bare68k.api.traps as traps
 from macmemory import MacMemory
+import utils
 
 UNIMPLEMENTED_TRAP = 0xA89F
 UNIMPL_TRAP_ADDR   = 0xFFFF0000
@@ -34,16 +35,6 @@ TRAP_TABLE = {
     0xA994 : ("_CurResFile",            'dummy_trap',       0xFFF33044),
     0xA9A0 : ("_GetResource",           'get_resource',     0xFFF34048, 'W', 'L'),
 }
-
-def fourcc_to_bytes(fourcc):
-    res = bytearray()
-    for i in range(4):
-        res.append((fourcc >> (24 - i * 8)) & 0xFF)
-    return bytes(res)
-
-def sign_extend(value, bits):
-    sign_bit = 1 << (bits - 1)
-    return (value & (sign_bit - 1)) - (value & sign_bit)
 
 class InvalidTrap(Exception):
     def __init__(self, msg):
@@ -147,13 +138,13 @@ class MacTraps:
         self._rt.get_cpu().w_reg(M68K_REG_D0, 0) # return noErr
 
     def gestalt(self):
-        sel = fourcc_to_bytes(self._rt.get_cpu().r_reg(M68K_REG_D0))
+        sel = utils.fourcc_to_bytes(self._rt.get_cpu().r_reg(M68K_REG_D0))
         print("Gestalt called, selector='%s'" % sel.decode())
         self._rt.get_cpu().w_reg(M68K_REG_A0, 0xDEADBEEF)
 
     def get_resource(self):
-        res_type = fourcc_to_bytes(self._args[0])
-        res_id   = sign_extend(self._args[1], 16)
+        res_type = utils.fourcc_to_bytes(self._args[0])
+        res_id   = utils.sign_extend(self._args[1], 16)
         print("Res type = %s" % res_type.decode())
         print("Res ID = %d" % res_id)
 
