@@ -1,4 +1,5 @@
 ''' Various utility functions. '''
+from datetime import datetime
 import struct
 
 def bit_not(n, numbits=32):
@@ -31,3 +32,9 @@ def unpack_pstr(bin_data):
     str_len = bin_data[0]
     fmt_str = '%ip' % (str_len + 1)
     return struct.unpack(fmt_str, bin_data[0:str_len+1])[0].decode('mac_roman')
+
+HFS_TO_EPOCH = 2082844800
+
+def mactime_to_str(timestamp):
+    return datetime.fromtimestamp(timestamp - HFS_TO_EPOCH) \
+        .strftime('%Y-%m-%d %H:%M:%S')
