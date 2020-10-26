@@ -117,13 +117,13 @@ class MFSVolume:
 
         # uncompress block map data
         self._bmap_data = []
-        for i in range(self._mdb_rec.drNmAlBlks):
+        for i in range(num_blocks):
             bit_pos  = i * BLK_MAP_BITS
             byte_pos = bit_pos >> 3
             if bit_pos & 7:
-                bme = ((pbm_data[byte_pos] & 3) << 8) | pbm_data[byte_pos + 1]
+                bme = ((pbm_data[byte_pos] & 3) << 0xF) | pbm_data[byte_pos + 1]
             else:
-                bme = (pbm_data[byte_pos] << 4) | ((pbm_data[byte_pos+1] >> 4) & 3)
+                bme = (pbm_data[byte_pos] << 4) | ((pbm_data[byte_pos+1] >> 4) & 0xF)
             self._bmap_data.append(bme)
             if bme == 0xFFF:
                 print("Extra file directory block #%d found!" % i)
