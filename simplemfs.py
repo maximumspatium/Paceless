@@ -121,7 +121,7 @@ class MFSVolume:
             bit_pos  = i * BLK_MAP_BITS
             byte_pos = bit_pos >> 3
             if bit_pos & 7:
-                bme = ((pbm_data[byte_pos] & 3) << 0xF) | pbm_data[byte_pos + 1]
+                bme = ((pbm_data[byte_pos] & 0xF) << 8) | pbm_data[byte_pos + 1]
             else:
                 bme = (pbm_data[byte_pos] << 4) | ((pbm_data[byte_pos+1] >> 4) & 0xF)
             self._bmap_data.append(bme)
@@ -150,9 +150,6 @@ class MFSVolume:
 
             file_entry = MFSFileDirRec.from_file(self._img_file)
 
-            #if file_entry.flRStBlk:
-            #    print("Next RF sector: ", self._bmap_data[file_entry.flRStBlk - 2])
-
             # read file name
             name_len = self._img_file.read(1)[0] # read string length
             # move file position one byte back
@@ -166,6 +163,68 @@ class MFSVolume:
 
             if self._img_file.tell() & 1:
                 self._img_file.read(1)[0] # align file pos to a word boundary
+
+    def _get_file_blocks(self, start_block):
+        blocks = []
+        cur_block = start_block
+        while cur_block != 1:
+            next_block = self._bmap_data[cur_block - 2]
+            if next_block < 1 or next_block > 0xFFE:
+                print("Invalid block map value %d", next_block)
+                return []
+            blocks.append(cur_block)
+            cur_block = next_block
+        return blocks
+
+    def get_fork_size(self, file_num, fork):
+        if file_num not in self._files:
+            print("File %d not found" % file_num)
+            return 0
+
+        file = self._files[file_num]
+        if fork == 0:
+            return file[0].flLgLen
+        else:
+            return file[0].flRLgLen
+
+    def read_fork(self, file_num, fork, nbytes, pos=0):
+        if file_num not in self._files:
+            print("File %d not found" % file_num)
+            return None
+
+        file = self._files[file_num]
+
+        if fork == 0:
+            start_block = file[0].flStBlk
+            fork_length = file[0].flLgLen
+        else:
+            start_block = file[0].flRStBlk
+            fork_length = file[0].flRLgLen
+
+        if start_block == 0:
+            print("Specified fork is empty")
+            return None
+
+        blocks = self._get_file_blocks(start_block)
+        if (len(blocks) * self._mdb_rec.drAlBlkSiz) < fork_length:
+            print("Inconsistent fork length vs number of allocaton blocks!")
+            return None
+
+        data = bytearray()
+
+        block_size = self._mdb_rec.drAlBlkSiz
+        blocks_offset = self._mdb_rec.drAlBlSt * SECT_SIZE - 2 * block_size
+
+        while nbytes > 0:
+            block_pos = pos % block_size
+            chunk_size = min(block_size - block_pos, nbytes)
+            file_pos = blocks[pos // block_size] * block_size + blocks_offset + block_pos
+            self._img_file.seek(file_pos, os.SEEK_SET)
+            data.extend(self._img_file.read(chunk_size))
+            pos += chunk_size
+            nbytes -= chunk_size
+
+        return data
 
     def _load_vol_info(self):
         if self._img_size < MIN_MFS_SIZE:
@@ -205,3 +264,4 @@ if __name__ == "__main__":
         mfs_vol = MFSVolume(mfs_file)
         mfs_vol._print_mdb_rec() # just for testing
         mfs_vol.list_files()
+        mfs_vol.read_fork(4, 1, nbytes=16, pos=0)
