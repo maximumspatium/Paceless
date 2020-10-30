@@ -13,7 +13,8 @@ if __name__ == "__main__":
 
     with open(mfs_img_file, 'rb') as mfs_file:
         mfs_vol = MFSVolume(mfs_file)
-        mfs_vol.list_files()
+        if mfs_vol.list_files() == 0:
+            exit(1)
 
         file_num = 0
         while file_num == 0:

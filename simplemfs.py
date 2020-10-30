@@ -12,6 +12,7 @@ SECT_SIZE    = 512
 MDB_START    = SECT_SIZE * 2
 MIN_MFS_SIZE = SECT_SIZE * 4 # minimum MFS size (2 boot sectors + 2 MDB sectors)
 BLK_MAP_BITS = 12            # number of bits in one block map entry
+DSK_CPY_SIZE = 84            # newer Disk Copy (4.2) image contains an extra header
 
 MFS_VOL_SIG  = 0xD2D7   # MFS volume signature
 
@@ -73,6 +74,7 @@ class MFSVolume:
     def __init__(self, img_file):
         self._img_file  = img_file
         self._img_size  = self._get_image_size()
+        self._mfs_offs  = 0
         self._mdb_rec   = None
         self._bmap_size = 0
         self._bmap_data = None
@@ -85,9 +87,18 @@ class MFSVolume:
         self._img_file.seek(0, os.SEEK_SET)
         return size
 
+    def _check_mfs_sig(self, offset=0):
+        self._img_file.seek(MDB_START + offset, os.SEEK_SET)
+        sig = struct.unpack('>H', self._img_file.read(2))[0]
+        if sig == MFS_VOL_SIG:
+            return True
+        else:
+            return False
+
     def _read_mdb_rec(self):
-        self._img_file.seek(MDB_START, os.SEEK_SET)
+        self._img_file.seek(MDB_START + self._mfs_offs, os.SEEK_SET)
         self._mdb_rec = MDBRec.from_file(self._img_file)
+        print(self._img_file.tell())
         self._vol_name = utils.unpack_pstr(self._img_file.read(28))
 
     def _print_mdb_rec(self):
@@ -134,7 +145,7 @@ class MFSVolume:
             return
 
         dir_sect = self._mdb_rec.drDirSt
-        self._img_file.seek(dir_sect * SECT_SIZE)
+        self._img_file.seek(dir_sect * SECT_SIZE + self._mfs_offs)
 
         for fn in range(self._mdb_rec.drNmFls):
             if not ((self._img_file.read(1)[0]) & 0x80):
@@ -143,7 +154,7 @@ class MFSVolume:
                 if (dir_sect - self._mdb_rec.drDirSt) > self._mdb_rec.drBlLen:
                     print("File directory exhausted!")
                     return
-                self._img_file.seek(dir_sect * SECT_SIZE)
+                self._img_file.seek(dir_sect * SECT_SIZE + self._mfs_offs)
             else:
                 # move file position one byte back
                 self._img_file.seek(-1, os.SEEK_CUR)
@@ -219,7 +230,7 @@ class MFSVolume:
             block_pos = pos % block_size
             chunk_size = min(block_size - block_pos, nbytes)
             file_pos = blocks[pos // block_size] * block_size + blocks_offset + block_pos
-            self._img_file.seek(file_pos, os.SEEK_SET)
+            self._img_file.seek(file_pos + self._mfs_offs, os.SEEK_SET)
             data.extend(self._img_file.read(chunk_size))
             pos += chunk_size
             nbytes -= chunk_size
@@ -230,6 +241,12 @@ class MFSVolume:
         if self._img_size < MIN_MFS_SIZE:
             print("Image file too small")
             return False
+        if not self._check_mfs_sig():
+            if not self._check_mfs_sig(offset=DSK_CPY_SIZE):
+                print("No MFS volume found")
+                return False
+            else:
+                self._mfs_offs = DSK_CPY_SIZE
         self._read_mdb_rec()
         if self._mdb_rec.drSigWord != MFS_VOL_SIG:
             print("Bad MFS signature")
@@ -241,7 +258,7 @@ class MFSVolume:
     def list_files(self):
         if not self._files:
             print("This volume appears to be empty.")
-            return
+            return 0
 
         for fn, file in self._files.items():
             print("File #%d:" % fn)
@@ -252,6 +269,8 @@ class MFSVolume:
             print("\tData fork length:", file[0].flLgLen)
             print("\tResource fork length:", file[0].flRLgLen)
             print("")
+
+        return len(self._files)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
