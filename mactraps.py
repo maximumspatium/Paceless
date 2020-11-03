@@ -10,6 +10,7 @@ UNIMPL_TRAP_ADDR   = 0xFFFF0000
 TRAP_TABLE = {
     # trap #    trap name               method name         trap address  params
     0xA01B : ("_SetZone",               'dummy_trap',       0xFFF30100),
+    0xA01F : ("_DisposePtr",            'dummy_trap',       0xFFF30110),
     0xA029 : ("_HLock",                 'dummy_trap',       0xFFF30204),
     0xA02E : ("_BlockMove",             'block_copy',       0xFFF30308),
     0xA055 : ("_StripAddress",          'dummy_trap',       0xFFF3040C),
@@ -119,6 +120,7 @@ class MacTraps:
             for i in range(sz):
                 self._rt.get_mem().w8(new_ptr + i, 0)
         self._rt.get_cpu().w_reg(M68K_REG_A0, new_ptr)
+        self._rt.get_cpu().w_reg(M68K_REG_D0, 0) # result code = noErr!
 
     def get_trap_addr(self):
         trap_num = (self._rt.get_cpu().r_reg(M68K_REG_D0)) & 0xFFFF
