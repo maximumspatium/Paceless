@@ -153,11 +153,28 @@ if __name__ == "__main__":
             jt_res = rf[b'CODE'][0]
             #print(jt_res.length)
             jt_data = jt_res.data_raw
-            #print(jt_data)
+
+            # read jump table header
+            jt_header = struct.unpack('>LLLL', jt_data[0:16])
+
+            # read first entry of the jump table
             jt_1st_entry = struct.unpack('>HHHH', jt_data[16:24])
             if jt_1st_entry[1] != 0x3F3C or jt_1st_entry[3] != 0xA9F0:
                 print("Invalid jump table! 1st entry is corrupted!")
                 exit(1)
+
+            mt = MacTraps(rt, args.path)
+
+            jt_length = jt_header[2]
+            jt_offset = jt_header[3]
+            print("JT length:", hex(jt_offset + jt_length))
+            jt_handle = mt._mm.new_handle(jt_offset + jt_length)
+            a5_base = mem.r32(jt_handle)
+
+            # copy JT from CODE,0 to A5 + jt_offset
+            for i in range(jt_length):
+                mem.w8(a5_base + jt_offset + i, jt_data[16 + i])
+
             ep_seg_id = jt_1st_entry[2]
             ep_offset = jt_1st_entry[0]
             print("1st entry of the JT points to segment %d, offset %x" % (ep_seg_id, ep_offset))
@@ -166,7 +183,6 @@ if __name__ == "__main__":
             ep_res_len = ep_res.length
             ep_data = ep_res.data_raw
 
-            mt = MacTraps(rt, args.path)
             prog_handle = mt._mm.new_handle(ep_res_len)
             prog_base = mem.r32(prog_handle)
             print("prog_handle=%X, prog_base=%X" % (prog_handle, prog_base))
@@ -202,6 +218,9 @@ if __name__ == "__main__":
     #tools.enable_breakpoint(0)
 
     rt.reset(prog_base + ep_offset + 4, 0x1FF00)
+
+    # set up A5 to point to the "A5 world" with JT loaded
+    rt.get_cpu().w_reg(M68K_REG_A5, a5_base)
 
     #mem.w32(0x28, 0x1000)  # Exception Vector A-Line
     #mem.w16(0x1000, 0x4e70)
