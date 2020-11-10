@@ -47,6 +47,7 @@ class MacTraps:
         self._rt = rt # bare68k runtime object
         self._rf = rsrcfork.open(rf_path) # rsrcfork object
         self._last_trap = UNIMPLEMENTED_TRAP
+        self._res_err = 0
         self._args = []
         self._mm = MacMemory(rt)
         self._register_traps()
@@ -160,6 +161,10 @@ class MacTraps:
 
         if res_type not in self._rf or res_id not in self._rf[res_type]:
             print("Missing resource %s, ID=%X!" % (res_type.decode(), res_id))
+            self._res_err = -192 # resNotFound
+            sp = self._rt.get_cpu().r_sp()
+            self._rt.get_mem().w32(sp, 0)
+            return
 
         res_info = self._rf[res_type][res_id]
         res_h    = self._mm.new_handle(res_info.length)

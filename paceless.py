@@ -168,7 +168,8 @@ if __name__ == "__main__":
             jt_length = jt_header[2]
             jt_offset = jt_header[3]
             print("JT length:", hex(jt_offset + jt_length))
-            jt_handle = mt._mm.new_handle(jt_offset + jt_length)
+            jt_handle = mt._mm.new_handle(
+                utils.align(jt_offset + jt_length, 0x10000))
             a5_base = mem.r32(jt_handle)
 
             # copy JT from CODE,0 to A5 + jt_offset
