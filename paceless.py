@@ -124,7 +124,7 @@ if __name__ == "__main__":
     mem_cfg = MemoryConfig()
 
     # create a RAM region (64k) starting at address 0
-    mem_cfg.add_ram_range(0, 5)
+    mem_cfg.add_ram_range(0, 10)
 
     if args.rom_path:
         print("Loading ROM...")

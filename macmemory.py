@@ -6,7 +6,7 @@ from utils import align
 HANDLE_START = 0x10000 # begin of the memory block for storing handles
 HANDLE_SIZE  = 0x08000 # size of the handles block
 MEM_START    = 0x20000 # begin of the allocatable memory block
-MEM_SIZE     = 0x30000 # size of the allocatable memory
+MEM_SIZE     = 0x50000 # size of the allocatable memory
 
 class MemoryException(Exception):
     def __init__(self, msg):
