@@ -156,6 +156,10 @@ class MacTraps:
         elif sel == b'proc':
             print("Tell them we have a 68020 CPU")
             self._rt.get_cpu().w_reg(M68K_REG_A0, 3)
+            self._rt.get_cpu().w_reg(M68K_REG_D0, 0)
+        elif sel == b'vm  ':
+            self._rt.get_cpu().w_reg(M68K_REG_A0, 0)
+            self._rt.get_cpu().w_reg(M68K_REG_D0, 0)
         else:
             print("Unimplemented selector")
             self._rt.get_cpu().w_reg(M68K_REG_A0, 0xCAFEBABE)
