@@ -84,6 +84,13 @@ class MacTraps:
                     self._args.insert(0, self._rt.get_mem().r32(sp))
                     sp += 4
                     par_size += 4
+                elif trap_info[i + 3] == 'B':
+                    # WARNING: byte params always occupy words on the stack!
+                    # the value of a byte param is placed into the high-order
+                    # byte of the stack word
+                    self._args.insert(0, self._rt.get_mem().r8(sp))
+                    sp += 2
+                    par_size += 2
                 else:
                     self._args.insert(0, self._rt.get_mem().r16(sp))
                     sp += 2
