@@ -38,7 +38,10 @@ class MacMemory:
         return ptr
 
     def new_handle(self, size, zero=False):
-        new_ptr = self.alloc_mem(size)
+        if size == 0:
+            new_ptr = 0
+        else:
+            new_ptr = self.alloc_mem(size)
         new_handle = self._alloc_handle()
         self._mem.w32(new_handle, new_ptr) # set up virtual memory appropriately
         if zero:
