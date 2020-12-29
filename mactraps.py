@@ -2,10 +2,13 @@ import rsrcfork
 from bare68k.consts import *
 import bare68k.api.traps as traps
 from macmemory import MacMemory
+from collections import defaultdict
 import utils
 
 UNIMPLEMENTED_TRAP = 0xA89F
 UNIMPL_TRAP_ADDR   = 0xFFFF0000
+
+LM_RESLOAD = 0xA5E
 
 TRAP_TABLE = {
     # trap #    trap name               method name         trap address  params
@@ -13,8 +16,11 @@ TRAP_TABLE = {
     0xA01F : ("_DisposePtr",            'dummy_trap',       0xFFF30110),
     0xA029 : ("_HLock",                 'dummy_trap',       0xFFF30204),
     0xA02E : ("_BlockMove",             'block_copy',       0xFFF30308),
+    0xA04A : ("_HNoPurge",              'dummy_trap',       0xFFF30340),
     0xA055 : ("_StripAddress",          'dummy_trap',       0xFFF3040C),
     0xA064 : ("_MoveHHi",               'dummy_trap',       0xFFF30510),
+    0xA069 : ("_HGetState",             'dummy_trap',       0xFFF30514),
+    0xA06A : ("_HSetState",             'dummy_trap',       0xFFF30518),
     0xA0AD : ("_GestaltDispatch",       'dummy_trap',       0xFFF30614),
     0xA0BD : ("_CacheFlush",            'dummy_trap',       0xFFF30718),
     0xA11A : ("_GetZone",               'dummy_trap',       0xFFF3081C),
@@ -33,9 +39,14 @@ TRAP_TABLE = {
     0xA71E : ("_NewPtrSysClear",        'new_ptr',          0xFFF31050),
     0xA722 : ("_NewHandleSysClear",     'new_handle',       0xFFF31080),
     0xA746 : ("_GetToolTrapAddress",    'get_trap_addr',    0xFFF32040),
+    0xA81F : ("_Get1Resource",          'get_resource',     0xFFF33000, 'W', 'L'),
+    0xA820 : ("_Get1NamedResource",     'named_resource',   0xFFF33004, 'L', 'L'),
     0xA96E : ("_Dequeue",               'dummy_trap',       0x004019F0),
     0xA994 : ("_CurResFile",            'dummy_trap',       0xFFF33044),
-    0xA9A0 : ("_GetResource",           'get_resource',     0xFFF34048, 'W', 'L'),
+    0xA99B : ("_SetResLoad",            'set_res_load',     0xFFF33048, 'B'),
+    0xA9A0 : ("_GetResource",           'get_resource',     0xFFF3404C, 'W', 'L'),
+    0xA9A2 : ("_LoadResource",          'load_resource',    0xFFF34050, 'L'),
+    0xA9AF : ("_ResError",              'res_error',        0xFFF34050)
 }
 
 class InvalidTrap(Exception):
@@ -51,6 +62,7 @@ class MacTraps:
         self._args = []
         self._mm = MacMemory(rt)
         self._register_traps()
+        self._res_used = defaultdict(dict)
 
     def _register_traps(self):
         ''' Register supported A-Traps with bare68k '''
@@ -163,6 +175,52 @@ class MacTraps:
         else:
             print("Unimplemented selector")
             self._rt.get_cpu().w_reg(M68K_REG_A0, 0xCAFEBABE)
+            self._rt.get_cpu().w_reg(M68K_REG_D0, 0xFFFFEA51)
+
+    def set_res_load(self):
+        self._rt.get_mem().w8(LM_RESLOAD, self._args[0] & 0xFF)
+
+    def res_error(self):
+        sp = self._rt.get_cpu().r_sp()
+        self._rt.get_mem().w16(sp, (self._res_err & 0xFFFF))
+
+    def _res_loaded(self, type, id):
+        if type in self._res_used and id in self._res_used[type]:
+            return (True, self._res_used[type][id])
+        else:
+            return (False, 0)
+
+    def _res_type_and_id_from_handle(self, res_h):
+        for type, ids in self._res_used.items():
+            for id in ids:
+                if self._res_used[type][id] == res_h:
+                    return (True, type, id)
+        return (False, 0, 0)
+
+    def _load_resource(self, res_h):
+        res_ptr = self._rt.get_mem().r32(res_h) # dereference resource handle
+        if res_ptr == 0:
+            print("Try to load resource")
+            res, res_type, res_id = self._res_type_and_id_from_handle(res_h)
+            if not res:
+                print("Invalid resource handle passed!")
+                self._res_err = -192 # resNotFound
+                return
+
+            res_info = self._rf[res_type][res_id]
+
+            res_ptr = self._mm.alloc_mem(res_info.length)
+            print("res_ptr=%X" % res_ptr)
+            print("res_info.length=%X" % res_info.length)
+            for i in range(res_info.length):
+                self._rt.get_mem().w8(res_ptr + i, res_info.data_raw[i])
+
+            self._rt.get_mem().w32(res_h, res_ptr)
+
+        self._res_err = 0 # noErr
+
+    def load_resource(self):
+        self._load_resource(self._args[0])
 
     def get_resource(self):
         res_type = utils.fourcc_to_bytes(self._args[0])
@@ -170,20 +228,78 @@ class MacTraps:
         print("Res type = %s" % res_type.decode())
         print("Res ID = %d" % res_id)
 
+        self._res_err = 0 # noErr, assume we'll succeed for now
+
+        loaded, res_h = self._res_loaded(res_type, res_id)
+        if loaded:
+            print("Resource %s, ID=%d already loaded" % (res_type.decode(), res_id))
+            if self._rt.get_mem().r8(LM_RESLOAD):
+                self._load_resource(res_h)
+            sp = self._rt.get_cpu().r_sp()
+            self._rt.get_mem().w32(sp, res_h) # return resource handle
+            return
+
         if res_type not in self._rf or res_id not in self._rf[res_type]:
             print("Missing resource %s, ID=%X!" % (res_type.decode(), res_id))
-            self._res_err = -192 # resNotFound
+            self._res_err = 0 # noErr
             sp = self._rt.get_cpu().r_sp()
-            self._rt.get_mem().w32(sp, 0)
+            self._rt.get_mem().w32(sp, 0) # return NIL
             return
 
         res_info = self._rf[res_type][res_id]
-        res_h    = self._mm.new_handle(res_info.length)
-        res_ptr  = self._rt.get_mem().r32(res_h)
+
+        # if _res_load = FALSE return empty handle
+        if not self._rt.get_mem().r8(LM_RESLOAD):
+            res_h = self._mm.new_handle(0)
+            self._res_used[res_type][res_id] = res_h
+            sp = self._rt.get_cpu().r_sp()
+            self._rt.get_mem().w32(sp, res_h) # return resource handle
+            return
+
+        # otherwise, load resource data into memory
+        res_h   = self._mm.new_handle(res_info.length)
+        res_ptr = self._rt.get_mem().r32(res_h)
         print("res_ptr=%X" % res_ptr)
         print("res_info.length=%X" % res_info.length)
         for i in range(res_info.length):
             self._rt.get_mem().w8(res_ptr + i, res_info.data_raw[i])
 
+        self._res_used[res_type][res_id] = res_h
+
         sp = self._rt.get_cpu().r_sp()
-        self._rt.get_mem().w32(sp, res_h)
+        self._rt.get_mem().w32(sp, res_h) # return resource handle
+
+    def named_resource(self):
+        res_type = utils.fourcc_to_bytes(self._args[0])
+        name_ptr = self._args[1]
+
+        # copy Pascal string from Mac memory to Python bytearray
+        pstr = bytearray()
+        for i in range(self._rt.get_mem().r8(name_ptr) + 1):
+            pstr.append(self._rt.get_mem().r8(name_ptr + i))
+
+        res_name = utils.unpack_pstr(pstr)
+        print("resource type: %s" % res_type.decode())
+        print("resource name: %s" % res_name)
+
+        if res_type not in self._rf:
+            print("Resource type %s not found" % res_type.decode())
+            self._res_err = -192 # resNotFound FIXME!??
+            sp = self._rt.get_cpu().r_sp()
+            self._rt.get_mem().w32(sp, 0) # return NIL
+            return
+
+        res_found = False
+
+        for res_id in self._rf[res_type]:
+            res_info = self._rf[res_type][res_id]
+            if res_info.name != None and res_info.name == res_name:
+                res_found = True
+
+        if not res_found:
+            self._res_err = -192 # resNotFound FIXME!??
+            sp = self._rt.get_cpu().r_sp()
+            self._rt.get_mem().w32(sp, 0) # return NIL
+            return
+
+        print("TODO: load named resource")
