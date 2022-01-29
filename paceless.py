@@ -11,6 +11,7 @@ from bare68k.consts import *
 from bare68k.machine import *
 import bare68k.api.tools as tools
 from mactraps import MacTraps, InvalidTrap
+import utils
 
 md = Cs(CS_ARCH_M68K, CS_MODE_M68K_020)
 
@@ -23,10 +24,14 @@ def disas_single_68k(address, code, mac_traps):
         except InvalidTrap:
             print("0x%x\t\tDC.W\t$0x%X" % (address, trap_num))
         return 2
-    instrs = md.disasm(code, address)
-    i = next(instrs)
-    print("0x%x\t\t%s\t%s" % (i.address, i.mnemonic.upper(), i.op_str.upper()))
-    return i.size
+    try:
+        instrs = md.disasm(code, address)
+        i = next(instrs)
+        print("0x%x\t\t%s\t%s" % (i.address, i.mnemonic.upper(), i.op_str.upper()))
+        return i.size
+    except StopIteration:
+        print("0x%x\t\tDC.W\t$0x%X" % (address, (code[0] << 8) | code[1]))
+        return 2
 
 def is_cpu_reg(reg_name):
     if len(reg_name) < 2 or len(reg_name) > 2:
@@ -34,9 +39,8 @@ def is_cpu_reg(reg_name):
     if reg_name == "PC" or reg_name == "SR":
         return True
     elif reg_name.startswith("A") or reg_name.startswith("D"):
-        try:
-            reg_num = int(reg_name[1:2], 0) # string to int conversion may fail!
-        except ValueError:
+        flag,reg_num = utils.str_to_int(reg_name[1:2])
+        if not flag:
             return False
         if reg_num >= 0 and reg_num <= 7:
             return True
@@ -44,6 +48,20 @@ def is_cpu_reg(reg_name):
             return False
     else:
         return False
+
+def read_cpu_reg(cpu_obj, reg_name):
+    if not is_cpu_reg(reg_name):
+        print("Invalid register name %s" % reg_name)
+        return
+    if reg_name == "PC":
+        return cpu_obj.r_pc()
+    elif reg_name == "SR":
+        return cpu_obj.r_sr()
+    reg_num = int(reg_name[1:2], 0)
+    if reg_name.startswith("A"):
+        return cpu_obj.r_ax(reg_num)
+    else:
+        return cpu_obj.r_dx(reg_num)
 
 def write_cpu_reg(cpu_obj, reg_name, val):
     if not is_cpu_reg(reg_name):
@@ -60,6 +78,34 @@ def write_cpu_reg(cpu_obj, reg_name, val):
         cpu_obj.w_ax(reg_num, val)
     else:
         cpu_obj.w_dx(reg_num, val)
+
+def is_size_ind(dsize):
+    if len(dsize) == 1 and (dsize == "B" or dsize == "W" or dsize == "L"):
+        return True
+    elif (dsize == "BYTE" or dsize == "WORD" or dsize == "LONGWORD"):
+        return True
+    else:
+        return False
+
+def write_memory(cpu_obj, addr, val, dsize):
+    if not is_size_ind(dsize):
+        print("Invalid size: %s" % dsize)
+        return
+
+    if (dsize == "B" or dsize == "BYTE"):
+        mem.w8(addr, val)
+    elif (dsize == "W" or dsize == "WORD"):
+        if addr & 1:
+            print("Store address 0x%s not aligned on word boundary!" % addr)
+            return
+        mem.w16(addr, val)
+    elif (dsize == "L" or dsize == "LONGWORD"):
+        if addr & 3:
+            print("Store address 0x%X not aligned on longword boundary!" % addr)
+            return
+        mem.w32(addr, val)
+    else:
+        return
 
 # ------------------------------------------------------------------------
 
@@ -82,7 +128,7 @@ if __name__ == "__main__":
     mem_cfg = MemoryConfig()
 
     # create a RAM region (64k) starting at address 0
-    mem_cfg.add_ram_range(0, 5)
+    mem_cfg.add_ram_range(0, 10)
 
     if args.rom_path:
         print("Loading ROM...")
@@ -111,11 +157,29 @@ if __name__ == "__main__":
             jt_res = rf[b'CODE'][0]
             #print(jt_res.length)
             jt_data = jt_res.data_raw
-            #print(jt_data)
+
+            # read jump table header
+            jt_header = struct.unpack('>LLLL', jt_data[0:16])
+
+            # read first entry of the jump table
             jt_1st_entry = struct.unpack('>HHHH', jt_data[16:24])
             if jt_1st_entry[1] != 0x3F3C or jt_1st_entry[3] != 0xA9F0:
                 print("Invalid jump table! 1st entry is corrupted!")
                 exit(1)
+
+            mt = MacTraps(rt, args.path)
+
+            jt_length = jt_header[2]
+            jt_offset = jt_header[3]
+            print("JT length:", hex(jt_offset + jt_length))
+            jt_handle = mt._mm.new_handle(
+                utils.align(jt_offset + jt_length, 0x10000))
+            a5_base = mem.r32(jt_handle)
+
+            # copy JT from CODE,0 to A5 + jt_offset
+            for i in range(jt_length):
+                mem.w8(a5_base + jt_offset + i, jt_data[16 + i])
+
             ep_seg_id = jt_1st_entry[2]
             ep_offset = jt_1st_entry[0]
             print("1st entry of the JT points to segment %d, offset %x" % (ep_seg_id, ep_offset))
@@ -124,7 +188,6 @@ if __name__ == "__main__":
             ep_res_len = ep_res.length
             ep_data = ep_res.data_raw
 
-            mt = MacTraps(rt, args.path)
             prog_handle = mt._mm.new_handle(ep_res_len)
             prog_base = mem.r32(prog_handle)
             print("prog_handle=%X, prog_base=%X" % (prog_handle, prog_base))
@@ -160,6 +223,9 @@ if __name__ == "__main__":
     #tools.enable_breakpoint(0)
 
     rt.reset(prog_base + ep_offset + 4, 0x1FF00)
+
+    # set up A5 to point to the "A5 world" with JT loaded
+    rt.get_cpu().w_reg(M68K_REG_A5, a5_base)
 
     #mem.w32(0x28, 0x1000)  # Exception Vector A-Line
     #mem.w16(0x1000, 0x4e70)
@@ -210,10 +276,9 @@ if __name__ == "__main__":
             pass
         elif cmd == "step" or cmd == "si":
             if len(words) == 2:
-                try:
-                    count = int(words[1], 0)
-                except ValueError:
-                    print("Invalid instruction count")
+                flag,count = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid instruction count %s" % words[1])
                     continue
             else:
                 count = 1
@@ -225,7 +290,10 @@ if __name__ == "__main__":
             if len(words) < 2:
                 print("Missing parameter")
                 continue
-            addr = int(words[1], 0)
+            flag,addr = utils.str_to_int(words[1])
+            if not flag:
+                print("Invalid target address %s" % words[1])
+                continue
             print("Execute until 0x%03X" % addr)
             uh = until_hook(addr)
             rt.get_cpu().set_instr_hook_func(uh.func)
@@ -256,9 +324,17 @@ if __name__ == "__main__":
                     print("Missing parameters")
                     continue
             else:
-                addr  = int(words[1], 0)
-                count = int(words[2], 0)
-            #print("address %X, count %d" % (addr, count))
+                if is_cpu_reg(words[1].upper()):
+                    addr = read_cpu_reg(rt.get_cpu(), words[1].upper())
+                else:
+                    flag,addr = utils.str_to_int(words[1])
+                    if not flag:
+                        print("Invalid address %s" % words[1])
+                        continue
+                flag,count = utils.str_to_int(words[2])
+                if not flag:
+                    print("Invalid count %s" % words[2])
+                    continue
 
             try:
                 for i in range(count):
@@ -279,13 +355,29 @@ if __name__ == "__main__":
             if len(words) < 3:
                 print("Invalid command syntax")
                 continue
-            addr  = int(words[1], 0)
-            count = int(words[2], 0)
-            for i in range(count):
-                if (i & 0xF) == 0:
-                    print("\n0x%X\t" % (addr + i), end = '')
-                print("%02X " % (mem.r8(addr + i)), end = '')
-            print("\n")
+            if is_cpu_reg(words[1].upper()):
+                addr = read_cpu_reg(rt.get_cpu(), words[1].upper())
+            else:
+                flag,addr = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid address %s" % words[1])
+                    continue
+            flag,count = utils.str_to_int(words[2])
+            if not flag:
+                print("Invalid count %s" % words[2])
+                continue
+            if len(words) == 4:
+                with open(words[3], 'wb') as out_file:
+                    buf = bytearray()
+                    for i in range(count):
+                        buf.append(mem.r8(addr + i))
+                    out_file.write(buf)
+            else:
+                for i in range(count):
+                    if (i & 0xF) == 0:
+                        print("\n0x%X\t" % (addr + i), end = '')
+                    print("%02X " % (mem.r8(addr + i)), end = '')
+                print("\n")
         elif cmd == "set":
             if len(words) < 2:
                 print("Missing parameters")
@@ -295,23 +387,48 @@ if __name__ == "__main__":
                 print("Invalid command syntax")
                 continue
             reg = args[0].upper()
-            val = int(args[1], 0)
+            flag,val = utils.str_to_int(args[1])
+            if not flag:
+                print("Invalid value %s" % args[1])
+                continue
             if not is_cpu_reg(reg):
                 print("Unknown CPU register %s" % reg)
                 continue
             write_cpu_reg(rt.get_cpu(), reg, val)
+        elif cmd == "setmem":
+            if len(words) < 4:
+                print("Invalid command syntax")
+                continue
+            if is_cpu_reg(words[1].upper()):
+                addr = read_cpu_reg(rt.get_cpu(), words[1].upper())
+            else:
+                flag,addr = utils.str_to_int(words[1])
+                if not flag:
+                    print("Invalid address %s" % words[1])
+                    continue
+            flag,val = utils.str_to_int(words[2])
+            if not flag:
+                print("Invalid value %s" % words[2])
+                continue
+            dsize = words[3].upper()
+            write_memory(rt.get_cpu(), addr, val, dsize)
         elif cmd == "help":
-            print("step [N]   - execute N instructions")
-            print("             N defaults to 1 when omitted")
-            print("si         - alias for 'step'")
-            print("until addr - execute until addr is reached")
-            print("disas X Y  - disassemble Y instructions starting at X")
-            print("             disas with no params disassembles")
-            print("             five instructions starting at PC")
-            print("regs       - print internal registers")
-            print("dump X Y   - dump Y bytes starting at address X")
-            print("set X=Y    - change value of register X to Y")
-            print("quit       - shut down the simulator")
+            print("step [N]     - execute N instructions")
+            print("               N defaults to 1 when omitted\n")
+            print("si           - alias for 'step'\n")
+            print("until addr   - execute until addr is reached\n")
+            print("disas X Y    - disassemble Y instructions starting at X")
+            print("               disas with no params disassembles")
+            print("               five instructions starting at PC")
+            print("               X can be also any valid 68k register\n")
+            print("regs         - print internal registers\n")
+            print("dump X Y     - dump Y bytes starting at address X")
+            print("               X can be also any valid 68k register\n")
+            print("set X=Y      - change value of register X to Y\n")
+            print("setmem X Y Z - set address X to value Y with designated size Z")
+            print("               size is one of: byte (b), word (w), longword (l)")
+            print("               X can be also any valid 68k register\n")
+            print("quit         - shut down the simulator")
         else:
             print("Unknown command: %s" % cmd)
 
