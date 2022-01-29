@@ -24,10 +24,14 @@ def disas_single_68k(address, code, mac_traps):
         except InvalidTrap:
             print("0x%x\t\tDC.W\t$0x%X" % (address, trap_num))
         return 2
-    instrs = md.disasm(code, address)
-    i = next(instrs)
-    print("0x%x\t\t%s\t%s" % (i.address, i.mnemonic.upper(), i.op_str.upper()))
-    return i.size
+    try:
+        instrs = md.disasm(code, address)
+        i = next(instrs)
+        print("0x%x\t\t%s\t%s" % (i.address, i.mnemonic.upper(), i.op_str.upper()))
+        return i.size
+    except StopIteration:
+        print("0x%x\t\tDC.W\t$0x%X" % (address, (code[0] << 8) | code[1]))
+        return 2
 
 def is_cpu_reg(reg_name):
     if len(reg_name) < 2 or len(reg_name) > 2:
