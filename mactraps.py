@@ -163,15 +163,15 @@ class MacTraps:
     def gestalt(self):
         sel = utils.fourcc_to_bytes(self._rt.get_cpu().r_reg(M68K_REG_D0))
         print("Gestalt called, selector='%s'" % sel.decode())
+        self._rt.get_cpu().w_reg(M68K_REG_D0, 0) # report noErr
         if sel == b'os  ':
-            self._rt.get_cpu().w_reg(M68K_REG_A0, 0xDEADBEEF)
+            resp = 0 # bogus response
+            self._rt.get_cpu().w_reg(M68K_REG_A0, resp)
         elif sel == b'proc':
             print("Tell them we have a 68020 CPU")
             self._rt.get_cpu().w_reg(M68K_REG_A0, 3)
-            self._rt.get_cpu().w_reg(M68K_REG_D0, 0)
         elif sel == b'vm  ':
             self._rt.get_cpu().w_reg(M68K_REG_A0, 0)
-            self._rt.get_cpu().w_reg(M68K_REG_D0, 0)
         else:
             print("Unimplemented selector")
             self._rt.get_cpu().w_reg(M68K_REG_A0, 0xCAFEBABE)
