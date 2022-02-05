@@ -187,7 +187,7 @@ TRAP_TABLE = {
     0xA247 : ("_SetOSTrapAddress",      'unimplemented_trap',   0xFFFFFFFF),
     0xA254 : ("_UprStringMarks",        'unimplemented_trap',   0xFFFFFFFF),
     0xA256 : ("_StripText",             'unimplemented_trap',   0xFFFFFFFF),
-    0xA260 : ("_HFSDispatch",           'unimplemented_trap',   0xFFFFFFFF),
+    0xA260 : ("_HFSDispatch",           'hfs_dispatch',         0xFFF30D50),
     0xA285 : ("_IdleUpdate",            'unimplemented_trap',   0xFFFFFFFF),
     0xA28A : ("_SleepQInstall",         'unimplemented_trap',   0xFFFFFFFF),
     0xA31E : ("_NewPtrClear",           'new_ptr',              0xFFF30E34),
@@ -1043,7 +1043,7 @@ class MacTraps:
             return
 
         if res_type not in self._rf or res_id not in self._rf[res_type]:
-            print("Missing resource %s, ID=%X!" % (res_type.decode(), res_id))
+            print("Missing resource %s, ID=%d!" % (res_type.decode(), res_id))
             self._res_err = 0 # noErr
             sp = self._rt.get_cpu().r_sp()
             self._rt.get_mem().w32(sp, 0) # return NIL
@@ -1106,3 +1106,9 @@ class MacTraps:
             return
 
         print("TODO: load named resource")
+
+    def hfs_dispatch(self):
+        pb_ptr   = self._rt.get_cpu().r_reg(M68K_REG_A0)
+        selector = self._rt.get_cpu().r_reg(M68K_REG_D0)
+        print("Param block ptr = 0x%X" % pb_ptr)
+        print("Selector = %d" % selector)
