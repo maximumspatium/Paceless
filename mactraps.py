@@ -1,6 +1,7 @@
 import rsrcfork
 from bare68k.consts import *
 import bare68k.api.traps as traps
+from macfiles import MacFiles
 from macmemory import MacMemory
 from collections import defaultdict
 import utils
@@ -19,7 +20,7 @@ TRAP_TABLE = {
     0xA004 : ("_Control",               'unimplemented_trap',   0xFFFFFFFF),
     0xA005 : ("_Status",                'unimplemented_trap',   0xFFFFFFFF),
     0xA006 : ("_KillIO",                'unimplemented_trap',   0xFFFFFFFF),
-    0xA007 : ("_GetVolInfo",            'unimplemented_trap',   0xFFFFFFFF),
+    0xA007 : ("_GetVolInfo",            'get_volume_info',      0xFFFFFFFF),
     0xA008 : ("_Create",                'unimplemented_trap',   0xFFFFFFFF),
     0xA009 : ("_Delete",                'unimplemented_trap',   0xFFFFFFFF),
     0xA00A : ("_OpenRF",                'unimplemented_trap',   0xFFFFFFFF),
@@ -31,7 +32,7 @@ TRAP_TABLE = {
     0xA010 : ("_Allocate",              'unimplemented_trap',   0xFFFFFFFF),
     0xA011 : ("_GetEOF",                'unimplemented_trap',   0xFFFFFFFF),
     0xA012 : ("_SetEOF",                'unimplemented_trap',   0xFFFFFFFF),
-    0xA013 : ("_FlushVol",              'unimplemented_trap',   0xFFFFFFFF),
+    0xA013 : ("_FlushVol",              'flush_vol',            0xFFFFFFFF),
     0xA014 : ("_GetVol",                'unimplemented_trap',   0xFFFFFFFF),
     0xA015 : ("_SetVol",                'unimplemented_trap',   0xFFFFFFFF),
     0xA016 : ("_FInitQueue",            'unimplemented_trap',   0xFFFFFFFF),
@@ -39,16 +40,16 @@ TRAP_TABLE = {
     0xA018 : ("_GetFPos",               'unimplemented_trap',   0xFFFFFFFF),
     0xA019 : ("_InitZone",              'unimplemented_trap',   0xFFFFFFFF),
     0xA01B : ("_SetZone",               'dummy_trap',           0xFFF30100),
-    0xA01C : ("_FreeMem",               'unimplemented_trap',   0xFFFFFFFF),
+    0xA01C : ("_FreeMem",               'dummy_trap',           0xFFFFFFFF),
     0xA01F : ("_DisposePtr",            'dummy_trap',           0xFFF30110),
     0xA020 : ("_SetPtrSize",            'unimplemented_trap',   0xFFFFFFFF),
     0xA021 : ("_GetPtrSize",            'unimplemented_trap',   0xFFFFFFFF),
-    0xA023 : ("_DisposeHandle",         'unimplemented_trap',   0xFFFFFFFF),
+    0xA023 : ("_DisposeHandle",         'dispose_handle',       0xFFFFFFFF),
     0xA024 : ("_SetHandleSize",         'unimplemented_trap',   0xFFFFFFFF),
     0xA025 : ("_GetHandleSize",         'get_handle_size',      0xFFF30D30),
     0xA027 : ("_ReallocHandle",         'unimplemented_trap',   0xFFFFFFFF),
     0xA029 : ("_HLock",                 'dummy_trap',           0xFFF30204),
-    0xA02A : ("_HUnlock",               'unimplemented_trap',   0xFFFFFFFF),
+    0xA02A : ("_HUnlock",               'dummy_trap',           0xFFF30208),
     0xA02B : ("_EmptyHandle",           'unimplemented_trap',   0xFFFFFFFF),
     0xA02C : ("_InitApplZone",          'unimplemented_trap',   0xFFFFFFFF),
     0xA02D : ("_SetApplLimit",          'unimplemented_trap',   0xFFFFFFFF),
@@ -165,7 +166,7 @@ TRAP_TABLE = {
     0xA162 : ("_PurgeSpace",            'dummy_trap',           0xFFF30B28),
     0xA166 : ("_NewEmptyHandle",        'unimplemented_trap',   0xFFFFFFFF),
     0xA193 : ("_Microseconds",          'unimplemented_trap',   0xFFFFFFFF),
-    0xA198 : ("_HWPriv",                'unimplemented_trap',   0xFFFFFFFF),
+    0xA198 : ("_HWPriv",                'dummy_trap',           0xFFFFFFFF),
     0xA1AD : ("_Gestalt",               'gestalt',              0xFFF30C2C),
     0xA200 : ("_HOpen",                 'unimplemented_trap',   0xFFFFFFFF),
     0xA204 : ("_ControlImmed",          'unimplemented_trap',   0xFFFFFFFF),
@@ -174,7 +175,7 @@ TRAP_TABLE = {
     0xA209 : ("_HDelete",               'unimplemented_trap',   0xFFFFFFFF),
     0xA20A : ("_HOpenRF",               'unimplemented_trap',   0xFFFFFFFF),
     0xA20B : ("_HRename",               'unimplemented_trap',   0xFFFFFFFF),
-    0xA20C : ("_HGetFileInfo",          'unimplemented_trap',   0xFFFFFFFF),
+    0xA20C : ("_HGetFileInfo",          'hget_file_info',       0xFFFFFFFF),
     0xA20D : ("_HSetFileInfo",          'unimplemented_trap',   0xFFFFFFFF),
     0xA20E : ("_HUnmountVol",           'unimplemented_trap',   0xFFFFFFFF),
     0xA210 : ("_AllocContig",           'unimplemented_trap',   0xFFFFFFFF),
@@ -617,7 +618,7 @@ TRAP_TABLE = {
     0xA991 : ("_ModalDialog",           'unimplemented_trap',   0xFFFFFFFF),
     0xA992 : ("_DetachResource",        'unimplemented_trap',   0xFFFFFFFF),
     0xA993 : ("_SetResPurge",           'unimplemented_trap',   0xFFFFFFFF),
-    0xA994 : ("_CurResFile",            'dummy_trap',           0xFFF33044),
+    0xA994 : ("_CurResFile",            'current_res_file',     0xFFF33044),
     0xA995 : ("_InitResources",         'unimplemented_trap',   0xFFFFFFFF),
     0xA996 : ("_RsrcZoneInit",          'unimplemented_trap',   0xFFFFFFFF),
     0xA997 : ("_OpenResFile",           'unimplemented_trap',   0xFFFFFFFF),
@@ -862,10 +863,13 @@ class MacTraps:
         self._rf = rsrcfork.open(rf_path) # rsrcfork object
         self._last_trap = UNIMPLEMENTED_TRAP
         self._res_err = 0
+        self._cur_res_refnum = 2 # current resource file RefNum
         self._args = []
         self._mm = MacMemory(rt)
         self._register_traps()
         self._res_used = defaultdict(dict)
+
+        self._mfiles = MacFiles(rt, rf_path)
 
     def _register_traps(self):
         ''' Register supported A-Traps with bare68k '''
@@ -1108,7 +1112,26 @@ class MacTraps:
         print("TODO: load named resource")
 
     def hfs_dispatch(self):
-        pb_ptr   = self._rt.get_cpu().r_reg(M68K_REG_A0)
-        selector = self._rt.get_cpu().r_reg(M68K_REG_D0)
-        print("Param block ptr = 0x%X" % pb_ptr)
-        print("Selector = %d" % selector)
+        pb_ptr   = self._rt.get_cpu().r_reg(M68K_REG_A0) # param block ptr
+        selector = self._rt.get_cpu().r_reg(M68K_REG_D0) # function selector
+        result = self._mfiles.hfs_func(selector, pb_ptr)
+        self._rt.get_cpu().w_reg(M68K_REG_D0, result)
+
+    def current_res_file(self):
+        sp = self._rt.get_cpu().r_sp()
+        self._rt.get_mem().w16(sp, self._cur_res_refnum)
+
+    def hget_file_info(self):
+        pb_ptr   = self._rt.get_cpu().r_reg(M68K_REG_A0) # param block ptr
+        selector = self._rt.get_cpu().r_reg(M68K_REG_D0) # function selector
+        result = self._mfiles.hget_file_info(pb_ptr)
+        self._rt.get_cpu().w_reg(M68K_REG_D0, result)
+
+    def flush_vol(self):
+        self._rt.get_cpu().w_reg(M68K_REG_D0, 0) # report no error
+
+    def dispose_handle(self):
+        pass
+
+    def get_volume_info(self):
+        self._rt.get_cpu().w_reg(M68K_REG_D0, 0) # report no error
