@@ -2,6 +2,7 @@
 Python module for reading and writing Macintosh File System volume images.
 '''
 from hlstruct import Structure
+from macfiles import Point, FInfo
 import utils
 
 import os
@@ -34,21 +35,6 @@ class MDBRec(Structure):
         ( 'H', 'drAlBlSt'  ),
         ( 'I', 'drNxtFNum' ),
         ( 'H', 'drFreeBks' )
-    ]
-
-class Point(Structure):
-    _fields_ = [
-        ('>H', 'x'),
-        ('H',  'y')
-    ]
-
-class FInfo(Structure):
-    _fields_ = [
-        ('>I',  'fdType'    ),
-        ('I',   'fdCreator' ),
-        ('H',   'fdFlags'   ),
-        (Point, 'fdLocation'),
-        ('h',   'fdFldr'    )
     ]
 
 class MFSFileDirRec(Structure):
