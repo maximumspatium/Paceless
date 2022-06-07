@@ -315,7 +315,7 @@ if __name__ == "__main__":
         elif cmd == "regs":
             #cpu_obj.print_state()
             print(rt.get_cpu().get_regs())
-        elif cmd == "disas":
+        elif cmd == "disas" or cmd == "da":
             if len(words) < 3:
                 if len(words) == 1:
                     addr = rt.get_cpu().r_pc()
@@ -417,6 +417,7 @@ if __name__ == "__main__":
             print("               N defaults to 1 when omitted\n")
             print("si           - alias for 'step'\n")
             print("until addr   - execute until addr is reached\n")
+            print("da X Y       - shortcut for disas X Y")
             print("disas X Y    - disassemble Y instructions starting at X")
             print("               disas with no params disassembles")
             print("               five instructions starting at PC")
