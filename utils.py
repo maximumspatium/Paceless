@@ -33,6 +33,10 @@ def unpack_pstr(bin_data):
     fmt_str = '%ip' % (str_len + 1)
     return struct.unpack(fmt_str, bin_data[0:str_len+1])[0].decode('mac_roman')
 
+def pack_pstr(str):
+    bin_str = bytes(str, 'mac_roman')
+    return struct.pack('B%ds' % len(str), len(str), bin_str)
+
 HFS_TO_EPOCH = 2082844800
 
 def mactime_to_str(timestamp):
