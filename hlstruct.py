@@ -21,6 +21,9 @@ class StructField:
                     instance._buffer, self.offset)
             return r[0] if len(r) == 1 else r
 
+    def __set__(self, instance, val):
+        struct.pack_into(self.format, instance._buffer, self.offset, val)
+
 class StructureMeta(type):
     '''
     Metaclass that automatically creates StructField descriptors.
@@ -70,3 +73,8 @@ class NestedStruct():
             # further recomputation of this step
             setattr(instance, self.name, result)
             return result
+
+    def __set__(self, instance, val):
+        size = self.struct_type.struct_size
+        if size == val.struct_size:
+            instance._buffer[self.offset:self.offset+size] = val._buffer
